@@ -1,0 +1,13 @@
+/node_modules
+.env
+/__pycache__/
+*.pyc
+/venv
+/.vscode
+.DS_Store
+.idea/
+*.sqlite3
+*.log
+.env.local
+.env.*.local
+docker-compose.yml

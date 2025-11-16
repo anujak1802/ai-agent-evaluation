@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Agent Evaluation Dashboard</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f6f7fb;
+    }
+    header {
+      padding: 16px 24px;
+      background: #1f2933;
+      color: #fff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 {
+      font-size: 20px;
+      margin: 0;
+    }
+    main {
+      padding: 16px 24px;
+      display: grid;
+      grid-template-columns: 1.1fr 1.9fr;
+      gap: 16px;
+    }
+    section {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+    }
+    h2 {
+      font-size: 16px;
+      margin: 0 0 12px 0;
+    }
+    h3 {
+      font-size: 14px;
+      margin: 16px 0 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 6px 8px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+      vertical-align: top;
+    }
+    th {
+      background: #f9fafb;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    tr:hover {
+      background: #f3f4ff;
+      cursor: pointer;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .badge-pending { background: #fef9c3; color: #92400e; }
+    .badge-running { background: #dbeafe; color: #1d4ed8; }
+    .badge-completed { background: #dcfce7; color: #166534; }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #eef2ff;
+      font-size: 11px;
+    }
+    #run-details-header {
+      font-size: 13px;
+      color: #4b5563;
+      margin-bottom: 8px;
+    }
+    #run-details-header span {
+      font-weight: 600;
+      color: #111827;
+    }
+
+    #status-indicator {
+      font-size: 13px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    /* Bottom full-width section */
+    .bottom-section {
+      margin: 0 24px 24px;
+      margin-top: 4px;
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+    }
+
+    .section-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .section-header-row small {
+      color: #6b7280;
+      font-size: 12px;
+    }
+
+    .charts-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 8px;
+    }
+
+    .chart-container {
+      flex: 1;
+      min-width: 260px;
+      min-height: 240px;
+    }
+
+    .chart-container canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    .muted {
+      color: #6b7280;
+      font-size: 12px;
+    }
+  </style>
+
+  <!-- Chart.js for score & latency charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Agent Evaluation Dashboard</h1>
+    <div id="status-indicator">
+      API: <span class="pill" id="api-status-pill">Checking...</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- LEFT COLUMN: Agents + Runs -->
+    <section>
+      <h2>Agents</h2>
+      <table id="agents-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Model</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <h2 style="margin-top:18px;">Runs</h2>
+      <table id="runs-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Agent ID</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="muted">
+        Runs auto-refresh every 5 seconds.
+      </div>
+    </section>
+
+    <!-- RIGHT COLUMN: Summary run details -->
+    <section>
+      <h2>Run Details</h2>
+      <div id="run-details-header">Select a run to see its results.</div>
+      <table id="results-table">
+        <thead>
+          <tr>
+            <th>Result ID</th>
+            <th>Agent</th>
+            <th>Testcase</th>
+            <th>Score</th>
+            <th>Latency (ms)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <!-- BOTTOM FULL-WIDTH SECTION: Testcases + Detailed Results + Charts -->
+  <section class="bottom-section">
+    <div class="section-header-row">
+      <h2>Testcases & Run Analytics</h2>
+      <small>Click a run in the table above to see detailed responses and charts.</small>
+    </div>
+
+    <!-- Testcases Table -->
+    <h3>Testcases</h3>
+    <table id="testcases-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Prompt</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <!-- Detailed results + charts for a selected run -->
+    <div id="results-section" class="hidden">
+      <h3>Detailed Results for Run <span id="run-title"></span></h3>
+
+      <table id="detailed-results-table">
+        <thead>
+          <tr>
+            <th>Testcase</th>
+            <th>Response</th>
+            <th>Score</th>
+            <th>Latency (ms)</th>
+            <th>Cost ($)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <h3>Charts</h3>
+      <div class="charts-row">
+        <div class="chart-container">
+          <canvas id="scoreChart"></canvas>
+        </div>
+        <div class="chart-container">
+          <canvas id="latencyChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    // ------------------ Helpers ------------------
+    async function checkHealth() {
+      const pill = document.getElementById("api-status-pill");
+      try {
+        const res = await fetch("/health");
+        if (!res.ok) throw new Error();
+        pill.textContent = "OK";
+        pill.style.background = "#dcfce7";
+        pill.style.color = "#166534";
+      } catch (e) {
+        pill.textContent = "DOWN";
+        pill.style.background = "#fee2e2";
+        pill.style.color = "#991b1b";
+      }
+    }
+
+    function statusBadge(status) {
+      const lower = (status || "").toLowerCase();
+      let cls = "badge-pending";
+      if (lower === "running") cls = "badge-running";
+      if (lower === "completed") cls = "badge-completed";
+      return `<span class="badge ${cls}">${status}</span>`;
+    }
+
+    // ------------------ Load Agents ------------------
+    async function loadAgents() {
+      const tbody = document.querySelector("#agents-table tbody");
+      tbody.innerHTML = "";
+      try {
+        const res = await fetch("/agents/");
+        if (!res.ok) return;
+        const data = await res.json();
+        for (const a of data) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${a.id}</td>
+            <td>${a.name}</td>
+            <td><span class="pill">${a.model}</span></td>
+            <td>${a.created_at || ""}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+      } catch (e) {
+        console.error("Failed to load agents", e);
+      }
+    }
+
+    // ------------------ Load Testcases ------------------
+    async function loadTestcases() {
+      const tbody = document.querySelector("#testcases-table tbody");
+      tbody.innerHTML = "";
+      try {
+        const res = await fetch("/testcases/");
+        if (!res.ok) return;
+        const data = await res.json();
+        for (const t of data) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${t.id}</td>
+            <td>${t.name}</td>
+            <td>${t.prompt}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+      } catch (e) {
+        console.error("Failed to load testcases", e);
+      }
+    }
+
+    // ------------------ Load Runs ------------------
+    async function loadRuns() {
+      const tbody = document.querySelector("#runs-table tbody");
+      tbody.innerHTML = "";
+      try {
+        const res = await fetch("/evals/");
+        if (!res.ok) return;
+        const data = await res.json();
+        for (const r of data) {
+          const tr = document.createElement("tr");
+          tr.dataset.runId = r.id;
+          tr.innerHTML = `
+            <td>${r.id}</td>
+            <td>${r.run_name}</td>
+            <td>${statusBadge(r.status)}</td>
+            <td>${r.agent_id}</td>
+          `;
+          tr.addEventListener("click", () => {
+            loadSummaryForRun(r);
+            loadDetailedResults(r);
+          });
+          tbody.appendChild(tr);
+        }
+      } catch (e) {
+        console.error("Failed to load runs", e);
+      }
+    }
+
+    // ------------------ Right-panel summary for a run ------------------
+    async function loadSummaryForRun(run) {
+      const header = document.getElementById("run-details-header");
+      header.innerHTML = `
+        Run <span>#${run.id} – ${run.run_name}</span>, status: ${statusBadge(run.status)}
+      `;
+
+      const tbody = document.querySelector("#results-table tbody");
+      tbody.innerHTML = "";
+
+      try {
+        const res = await fetch(`/results/${run.id}`);
+        if (!res.ok) {
+          tbody.innerHTML = `<tr><td colspan="5">Failed to load results.</td></tr>`;
+          return;
+        }
+
+        const data = await res.json();
+        if (!data.length) {
+          tbody.innerHTML = `<tr><td colspan="5">No results yet.</td></tr>`;
+          return;
+        }
+
+        for (const row of data) {
+          const testCaseId = row.test_case_id ?? row.testcase_id ?? "";
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${row.id}</td>
+            <td>${row.agent_id}</td>
+            <td>${testCaseId}</td>
+            <td>${row.score != null ? row.score.toFixed(2) : ""}</td>
+            <td>${row.latency_ms != null ? row.latency_ms.toFixed(1) : ""}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+      } catch (e) {
+        console.error("Failed to load summary results", e);
+        tbody.innerHTML = `<tr><td colspan="5">Error loading results.</td></tr>`;
+      }
+    }
+
+    // ------------------ Bottom detailed results & charts ------------------
+    let scoreChart, latencyChart;
+
+    async function loadDetailedResults(run) {
+      const runId = run.id;
+      const resultsSection = document.getElementById("results-section");
+      const runTitle = document.getElementById("run-title");
+      const tbody = document.querySelector("#detailed-results-table tbody");
+
+      resultsSection.classList.remove("hidden");
+      runTitle.textContent = `#${run.id} – ${run.run_name}`;
+      tbody.innerHTML = "";
+
+      try {
+        const res = await fetch(`/results/${runId}`);
+        if (!res.ok) {
+          tbody.innerHTML = `<tr><td colspan="5">Failed to load results.</td></tr>`;
+          return;
+        }
+
+        const data = await res.json();
+        if (!data.length) {
+          tbody.innerHTML = `<tr><td colspan="5">No results yet.</td></tr>`;
+          renderCharts([], [], []);
+          return;
+        }
+
+        const labels = [];
+        const scores = [];
+        const latencies = [];
+
+        for (const r of data) {
+          const testCaseId = r.test_case_id ?? r.testcase_id ?? "";
+          tbody.innerHTML += `
+            <tr>
+              <td>${testCaseId}</td>
+              <td>${r.response ?? ""}</td>
+              <td>${r.score ?? ""}</td>
+              <td>${r.latency_ms ?? ""}</td>
+              <td>${r.cost_usd ?? ""}</td>
+            </tr>
+          `;
+          labels.push("TC " + testCaseId);
+          scores.push(r.score ?? 0);
+          latencies.push(r.latency_ms ?? 0);
+        }
+
+        renderCharts(labels, scores, latencies);
+      } catch (e) {
+        console.error("Failed to load detailed results", e);
+        tbody.innerHTML = `<tr><td colspan="5">Error loading results.</td></tr>`;
+        renderCharts([], [], []);
+      }
+    }
+
+    function renderCharts(labels, scores, latencies) {
+      const scoreCtx = document.getElementById("scoreChart");
+      const latencyCtx = document.getElementById("latencyChart");
+
+      if (scoreChart) scoreChart.destroy();
+      if (latencyChart) latencyChart.destroy();
+
+      if (!labels.length) {
+        // nothing to chart
+        return;
+      }
+
+      scoreChart = new Chart(scoreCtx, {
+        type: "bar",
+        data: {
+          labels: labels,
+          datasets: [{
+            label: "Score",
+            data: scores
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false
+        }
+      });
+
+      latencyChart = new Chart(latencyCtx, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [{
+            label: "Latency (ms)",
+            data: latencies
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false
+        }
+      });
+    }
+
+    // ------------------ Init ------------------
+    async function init() {
+      await checkHealth();
+      await loadAgents();
+      await loadTestcases();
+      await loadRuns();
+
+      // Auto-refresh runs every 5 seconds
+      setInterval(loadRuns, 5000);
+    }
+
+    init();
+  </script>
+</body>
+</html>
