@@ -30,3 +30,18 @@ def create_testcase(payload: TestCaseCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(tc)
     return {"id": tc.id, "name": tc.name}
+
+# GET /testcases
+@router.get("/", response_model=list[dict])
+def list_testcases(db: Session = Depends(get_db)):
+    testcases = db.query(TestCase).all()
+    return [
+        {
+            "id": tc.id,
+            "name": tc.name,
+            "prompt": tc.prompt,
+            "expected_behavior": tc.expected_behavior,
+            "created_at": tc.created_at,
+        }
+        for tc in testcases
+    ]
